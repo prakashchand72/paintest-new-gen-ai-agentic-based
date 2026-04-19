@@ -846,7 +846,10 @@ do_basic_vuln_checks() {
     : > vulns/basic_mixed_content.txt
     : > vulns/basic_checks.txt
 
-    grep -E '^http://' web/live.txt 2>/dev/null \
+    {
+        [ "$TARGET_SCAN" != "$TARGET_HOST" ] && printf '%s\n' "$TARGET_SCAN"
+        cat web/live.txt web/all_urls.txt subdomains/all.txt 2>/dev/null
+    } | grep -E '^http://' \
         | sed 's/^/HTTP-CLEAR-TEXT\t/' \
         | sort -u > vulns/basic_http_exposure.txt
 
@@ -872,6 +875,18 @@ do_basic_vuln_checks() {
 
     local c_hdrs
     mapfile -t c_hdrs < <(curl_headers)
+    while read -r url; do
+        [ -z "$url" ] && continue
+        local host port proto http_url http_resp
+        IFS=$'\t' read -r host port proto < <(url_host_port "$url")
+        [ -z "$host" ] && continue
+        http_url="http://${host}"
+        http_resp=$(curl -sI --max-time "$HTTP_TIMEOUT" -A "$UA" "${c_hdrs[@]}" "$http_url" 2>/dev/null | head -1)
+        printf '%s\n' "$http_resp" | grep -q '^HTTP/' \
+            && printf 'HTTP-AVAILABLE\t%s\t%s\n' "$http_url" "$http_resp" >> vulns/basic_http_exposure.txt
+    done < <(head -n "$BASIC_CHECK_LIMIT" web/live_dedup.txt)
+    sort -u -o vulns/basic_http_exposure.txt vulns/basic_http_exposure.txt 2>/dev/null || true
+
     while read -r url; do
         [ -z "$url" ] && continue
         local resp proto server powered cookie_name cookie_lower header canary injected_resp injected_body methods
@@ -1004,7 +1019,16 @@ do_basic_vuln_checks() {
             if [ -s "$cert_tmp" ] && openssl x509 -in "$cert_tmp" -noout >/dev/null 2>&1; then
                 openssl x509 -in "$cert_tmp" -noout -checkhost "$host" 2>/dev/null \
                     | grep -qi 'does NOT match' \
-                    && printf 'TLS-NAME-MISMATCH\t%s\t%s:%s\n' "$url" "$host" "$port" >> vulns/basic_tls_name_mismatch.txt
+                    && printf 'TLS-NAME-MISMATCH-SNI\t%s\t%s:%s\n' "$url" "$host" "$port" >> vulns/basic_tls_name_mismatch.txt
+            fi
+            rm -f "$cert_tmp"
+
+            cert_tmp=$(mktemp)
+            timeout 10 openssl s_client -connect "${host}:${port}" </dev/null > "$cert_tmp" 2>/dev/null || true
+            if [ -s "$cert_tmp" ] && openssl x509 -in "$cert_tmp" -noout >/dev/null 2>&1; then
+                openssl x509 -in "$cert_tmp" -noout -checkhost "$host" 2>/dev/null \
+                    | grep -qi 'does NOT match' \
+                    && printf 'TLS-NAME-MISMATCH-NO-SNI\t%s\t%s:%s\n' "$url" "$host" "$port" >> vulns/basic_tls_name_mismatch.txt
             fi
             rm -f "$cert_tmp"
         done < <(head -n "$TLS_CHECK_LIMIT" web/live_dedup.txt)
@@ -1019,6 +1043,7 @@ do_basic_vuln_checks() {
         vulns/basic_extra_ports.txt \
         vulns/basic_tls_legacy.txt \
         vulns/basic_tls_name_mismatch.txt \
+        vulns/basic_tls_testssl.txt \
         vulns/basic_sri_missing.txt \
         vulns/basic_host_header_injection.txt \
         vulns/basic_dangerous_methods.txt \
@@ -1147,11 +1172,12 @@ do_vuln_scan() {
     sort -u "$jwt_tmp" > checklist/jwt_endpoints.txt 2>/dev/null
     rm -f "$jwt_tmp"
 
-    # testssl in background — do NOT wait on it
+    # Keep this bounded so TLS findings are available before report generation.
     if have testssl.sh && [ -s web/live_dedup.txt ]; then
-        ( testssl.sh --quiet --fast "$(head -1 web/live_dedup.txt)" \
-            > vulns/ssl.txt 2>/dev/null ) &
-        disown
+        timeout 180 testssl.sh --quiet --fast "$(head -1 web/live_dedup.txt)" \
+            > vulns/ssl.txt 2>/dev/null || true
+        grep -Ei 'TLS 1|TLS1|SSLv|Trust \(hostname\)|certificate does not match|not match|mismatch' \
+            vulns/ssl.txt 2>/dev/null | sort -u > vulns/basic_tls_testssl.txt
     fi
 
     if [ "$SUBDOMAIN_MODE" -eq 1 ]; then
@@ -1476,6 +1502,10 @@ do_report() {
         echo "### TLS Name Mismatch"
         echo '```'
         head -30 vulns/basic_tls_name_mismatch.txt 2>/dev/null
+        echo '```'
+        echo "### TLS/SSL Tool Findings"
+        echo '```'
+        head -40 vulns/basic_tls_testssl.txt 2>/dev/null
         echo '```'
         echo "### Missing Subresource Integrity"
         echo '```'

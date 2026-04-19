@@ -208,7 +208,7 @@ Important directories:
 | `js/` | JS URLs, downloaded JS, endpoints, secret findings |
 | `params/` | GF/arjun/unfurl parameter outputs |
 | `fuzzing/` | ffuf results and custom wordlist |
-| `vulns/` | nuclei, dalfox, CORS, SSL, takeover findings, and `basic_*` checks |
+| `vulns/` | nuclei, dalfox, CORS, SSL/testssl, takeover findings, and `basic_*` checks |
 | `vulns/deep/` | Deep validation checks when `--deep` is enabled |
 | `vulns/ai_active/` | AI-generated active validation candidates and confirmed evidence |
 | `checklist/` | Manual hunting files |
