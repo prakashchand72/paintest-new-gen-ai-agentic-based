@@ -1,0 +1,9 @@
+/.env
+/scope.txt
+/recon_*_single_*/
+/recon_*_sd_*/
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store

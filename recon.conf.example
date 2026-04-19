@@ -1,0 +1,52 @@
+# =============================================================================
+# Paintester — Configuration
+# Copy to ~/.recon.conf and edit. Script auto-loads it on every run.
+#
+#   cp recon.conf.example ~/.recon.conf
+#   chmod 600 ~/.recon.conf
+#   nano ~/.recon.conf
+# =============================================================================
+
+# Your bug bounty handle (sent via X-Bug-Bounty header for identification)
+BOUNTY_HANDLE="anon"
+
+# Your out-of-band callback domain (interactsh / Burp Collaborator)
+# Used for CORS reflection + open-redirect payload tests
+CALLBACK_DOMAIN="oob.attacker-callback.invalid"
+
+# Notification webhook — auto-detects Discord / Slack / Telegram
+# Leave empty to disable notifications
+WEBHOOK_URL=""
+
+# Examples:
+#   Discord:  https://discord.com/api/webhooks/123.../abc...
+#   Slack:    https://hooks.slack.com/services/T.../B.../xxx
+#   Telegram: https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>
+
+# Authenticated recon (leave empty if not needed)
+AUTH_HEADER=""              # e.g. "Authorization: Bearer eyJ..."
+AUTH_COOKIE=""              # e.g. "session=abc; _csrf=xyz"
+
+# Performance tuning
+THREADS=25                  # concurrent connections
+RATE=30                     # requests per second (per tool)
+DEEP_THREADS=50       # deep mode concurrency
+DEEP_RATE=100         # deep mode request rate
+MAX_JS_FILES=300            # max JS files to download for analysis
+HTTP_TIMEOUT=15             # timeout for individual HTTP requests
+API_TIMEOUT=30              # timeout for external APIs (crt.sh etc.)
+WEBHOOK_CONNECT_TIMEOUT=20  # max seconds to establish webhook connection
+WEBHOOK_TIMEOUT=30          # max seconds per webhook delivery attempt
+WEBHOOK_RETRIES=3           # webhook delivery attempts before warning
+
+# Optional AI integration. These are ignored unless -ai or --ai-active is used.
+# Prefer exporting provider-specific keys in your shell instead of storing tokens here.
+AI_PROVIDER="openai"        # openai or anthropic
+AI_API_TOKEN=""             # optional; falls back to OPENAI_API_KEY / ANTHROPIC_API_KEY
+AI_MODEL=""                 # blank selects provider default
+AI_MAX_OUTPUT_TOKENS=2000   # AI triage output cap
+AI_ACTIVE_MAX_TESTS=50      # max bounded AI active validation candidates
+
+# Paths
+SCOPE_FILE="$HOME/.scope.txt"                  # default scope file
+SECLISTS="/usr/share/seclists"                 # SecLists location
