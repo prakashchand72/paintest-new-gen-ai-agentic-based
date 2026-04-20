@@ -201,6 +201,12 @@ install_go_tools() {
     go_install github.com/BishopFox/jsluice/cmd/jsluice@latest
     go_install github.com/owasp-amass/amass/v4/...@master
 
+    # v6 additions (optional — phases degrade gracefully if missing)
+    go_install github.com/projectdiscovery/asnmap/cmd/asnmap@latest
+    go_install github.com/projectdiscovery/mapcidr/cmd/mapcidr@latest
+    go_install github.com/j3ssie/metabigor@latest
+    go_install github.com/damit5/gitdorks_go@latest
+
     if have nuclei; then
         log "Updating nuclei templates"
         nuclei -update-templates -silent 2>/dev/null || true
@@ -228,7 +234,36 @@ install_python_tools() {
     pip_install arjun
     pip_install uro
     pip_install wafw00f
+    pip_install graphql-cop
+    pip_install s3scanner
+    # cloud_enum: optional, large deps
+    pip_install cloud-enum 2>/dev/null || warn "cloud_enum optional — skip if failed"
     ensure_user_bin_path
+}
+
+install_jwt_tool() {
+    have jwt_tool && { info "✓ jwt_tool already installed"; return 0; }
+    log "Installing jwt_tool"
+    git clone --depth 1 https://github.com/ticarpi/jwt_tool.git /tmp/jwt_tool 2>/dev/null || return 0
+    $SUDO mkdir -p /opt/jwt_tool
+    $SUDO cp -r /tmp/jwt_tool/* /opt/jwt_tool/ 2>/dev/null || true
+    $SUDO bash -c 'cat > /usr/local/bin/jwt_tool' <<'WRAP'
+#!/usr/bin/env bash
+exec python3 /opt/jwt_tool/jwt_tool.py "$@"
+WRAP
+    $SUDO chmod +x /usr/local/bin/jwt_tool
+    python3 -m pip install --user -r /opt/jwt_tool/requirements.txt 2>/dev/null || true
+    rm -rf /tmp/jwt_tool
+}
+
+install_sqlmap() {
+    have sqlmap && { info "✓ sqlmap already installed"; return 0; }
+    log "Installing sqlmap (for opt-in SQLMAP_RISK handoff)"
+    case "$OS" in
+        debian) $SUDO apt-get install -y sqlmap 2>/dev/null || true ;;
+        mac)    brew install sqlmap 2>/dev/null || true ;;
+        arch)   $SUDO pacman -S --noconfirm sqlmap 2>/dev/null || true ;;
+    esac
 }
 
 install_other_tools() {
@@ -430,6 +465,8 @@ main() {
     install_go_tools
     install_python_tools
     install_other_tools
+    install_jwt_tool
+    install_sqlmap
     install_seclists
     setup_config
     verify_install
