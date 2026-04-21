@@ -13,30 +13,30 @@ do_passive_recon() {
     dig "$TARGET" DMARC TXT +short   >> recon/dns.txt 2>/dev/null
     dig "_dmarc.$TARGET" TXT +short  >> recon/dns.txt 2>/dev/null
 
-    ( timeout "$API_TIMEOUT" curl_p -sS -A "$UA" \
+    ( curl_p --max-time "$API_TIMEOUT" -sS -A "$UA" \
         "https://api.hackertarget.com/aslookup/?q=${TARGET}" \
         > recon/asn.txt 2>/dev/null ) &
 
     if [ "$SUBDOMAIN_MODE" -eq 1 ]; then
-        ( timeout 60 curl_p -sS -A "$UA" "https://crt.sh/?q=%25.${TARGET}&output=json" \
+        ( curl_p --max-time 60 -sS -A "$UA" "https://crt.sh/?q=%25.${TARGET}&output=json" \
             | jq -r '.[].name_value' 2>/dev/null \
             | tr '[:upper:]' '[:lower:]' | tr ',' '\n' | sed 's/^\*\.//' \
             | sort -u > recon/crtsh.txt ) &
-        ( timeout 30 curl_p -sS -A "$UA" \
+        ( curl_p --max-time 30 -sS -A "$UA" \
             "https://jldc.me/anubis/subdomains/${TARGET}" \
             | jq -r '.[]?' 2>/dev/null > recon/anubis.txt ) &
-        ( timeout 30 curl_p -sS -A "$UA" \
+        ( curl_p --max-time 30 -sS -A "$UA" \
             "https://dns.bufferover.run/dns?q=.${TARGET}" \
             | jq -r '.FDNS_A[]? | split(",")[1] // empty' 2>/dev/null \
             | sort -u > recon/bufferover.txt ) &
-        ( timeout 30 curl_p -sS -A "$UA" \
+        ( curl_p --max-time 30 -sS -A "$UA" \
             "https://rapiddns.io/subdomain/${TARGET}?full=1#result" 2>/dev/null \
             | grep -oE "[a-zA-Z0-9._-]+\\.${TARGET//./\\.}" | sort -u \
             > recon/rapiddns.txt ) &
     fi
 
     if [ "$SUBDOMAIN_MODE" -eq 1 ] && have httpx; then
-        ( timeout 20 httpx_p -u "https://${TARGET}" -favicon -silent \
+        ( httpx_p -u "https://${TARGET}" -favicon -silent -timeout 20 \
             > recon/favicon.txt 2>/dev/null ) &
     fi
 
@@ -131,21 +131,31 @@ do_subdomain_enum() {
     cat subdomains/*.txt 2>/dev/null | tr '[:upper:]' '[:lower:]' \
         | grep -E '^[a-z0-9._-]+$' | sort -u > subdomains/all_passive.txt
 
-    local wl="$SECLISTS/Discovery/DNS/subdomains-top1million-20000.txt"
-    [ "$DEEP_MODE" -eq 1 ] && [ -f "$SECLISTS/Discovery/DNS/subdomains-top1million-110000.txt" ] && \
-        wl="$SECLISTS/Discovery/DNS/subdomains-top1million-110000.txt"
-    if have dnsx && [ -f "$wl" ]; then
-        log "DNS bruteforce ($(basename "$wl"))"
-        dnsx -d "$TARGET" -w "$wl" -silent -o subdomains/bruteforce.txt 2>/dev/null
-    fi
+    if [ "${BRUTEFORCE_MODE:-0}" -eq 1 ]; then
+        local wl="$SECLISTS/Discovery/DNS/subdomains-top1million-20000.txt"
+        [ "$DEEP_MODE" -eq 1 ] && [ -f "$SECLISTS/Discovery/DNS/subdomains-top1million-110000.txt" ] && \
+            wl="$SECLISTS/Discovery/DNS/subdomains-top1million-110000.txt"
+        if have dnsx && [ -f "$wl" ]; then
+            log "DNS bruteforce ($(basename "$wl"), cap ${DNS_BRUTE_TIMEOUT:-600}s)"
+            timeout "${DNS_BRUTE_TIMEOUT:-600}" \
+                dnsx -d "$TARGET" -w "$wl" -silent \
+                -o subdomains/bruteforce.txt 2>/dev/null
+        fi
 
-    if have gotator && [ -s subdomains/all_passive.txt ] \
-       && [ "$(wc -l < subdomains/all_passive.txt)" -lt 500 ]; then
-        log "Permutations"
-        local permwl="$SECLISTS/Discovery/DNS/dns-Jhaddix.txt"
-        [ -f "$permwl" ] && gotator -sub subdomains/all_passive.txt -perm "$permwl" \
-            -depth 1 -numbers 3 -mindup -adv -md 2>/dev/null \
-            | dnsx -silent 2>/dev/null > subdomains/permutations.txt
+        if have gotator && [ -s subdomains/all_passive.txt ] \
+           && [ "$(wc -l < subdomains/all_passive.txt)" -lt 500 ]; then
+            local permwl="$SECLISTS/Discovery/DNS/dns-Jhaddix.txt"
+            if [ -f "$permwl" ]; then
+                log "Permutations (cap ${DNS_PERM_TIMEOUT:-600}s)"
+                timeout "${DNS_PERM_TIMEOUT:-600}" bash -c '
+                    gotator -sub subdomains/all_passive.txt -perm "$1" \
+                        -depth 1 -numbers 3 -mindup -adv -md 2>/dev/null \
+                    | dnsx -silent 2>/dev/null > subdomains/permutations.txt
+                ' _ "$permwl"
+            fi
+        fi
+    else
+        info "DNS bruteforce skipped (pass -bf/--bruteforce to enable)"
     fi
 
     cat subdomains/*.txt 2>/dev/null | sort -u > subdomains/all_unfiltered.txt

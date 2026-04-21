@@ -39,6 +39,7 @@ TEST_WEBHOOK_MODE=0
 DEEP_MODE=0
 AI_MODE=0
 AI_ACTIVE_MODE=0
+BRUTEFORCE_MODE=0
 TARGET=""
 
 while [ $# -gt 0 ]; do
@@ -50,6 +51,7 @@ while [ $# -gt 0 ]; do
         --ai-active) AI_MODE=1; AI_ACTIVE_MODE=1; shift ;;
         --test-webhook) TEST_WEBHOOK_MODE=1; shift ;;
         --deep|--aggressive|--lab) DEEP_MODE=1; shift ;;
+        -bf|--bruteforce) BRUTEFORCE_MODE=1; shift ;;
         -h|--help)
             cat <<EOF
 Usage: $0 [options] <target>
@@ -60,6 +62,10 @@ Usage: $0 [options] <target>
   --ai-active   Let AI propose bounded payloads and actively validate candidates
   --deep, --aggressive, --lab
                 Enable deep validation checks and broader real-world coverage
+  -bf, --bruteforce
+                Enable DNS bruteforce + permutations in subdomain_enum
+                (20k wordlist; 110k when combined with --deep)
+                Tunable caps: DNS_BRUTE_TIMEOUT, DNS_PERM_TIMEOUT (seconds, default 600)
   --test-webhook
                 Send one webhook test message and exit
   -h, --help    Show this help
@@ -237,6 +243,7 @@ EOF
         echo -e "${Y}[+] Mode:      single-target pentest${N}"
     fi
     [ "$DEEP_MODE" -eq 1 ] && echo -e "${R}[+] Deep mode:  validation checks enabled${N}"
+    [ "$BRUTEFORCE_MODE" -eq 1 ] && echo -e "${Y}[+] Bruteforce: DNS bruteforce + permutations enabled${N}"
     [ "$AI_MODE" -eq 1 ] && echo -e "${C}[+] AI triage: ${AI_PROVIDER}/${AI_MODEL}${N}"
     [ "$AI_ACTIVE_MODE" -eq 1 ] && echo -e "${R}[+] AI active: ${AI_ACTIVE_MAX_TESTS} bounded tests max${N}"
     [ "$RESUME_MODE" -eq 1 ] && echo -e "${C}[+] Resume:    ON${N}"
