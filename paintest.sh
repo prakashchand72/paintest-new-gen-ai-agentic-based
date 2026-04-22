@@ -319,22 +319,22 @@ Output: \`${OUTPUT_DIR}\`"
     # Summary counts for final webhook
     local crit high hosts subs deep_xss deep_lfi basic ai_active_confirmed
     local sqli_err sqli_time ssrf_meta graphql_intro jwt_tokens xss_conf idor chains
-    crit=$(wc -l < vulns/nuclei_critical.txt 2>/dev/null || echo 0)
-    high=$(wc -l < vulns/nuclei_high.txt 2>/dev/null || echo 0)
-    hosts=$(wc -l < web/live.txt 2>/dev/null || echo 0)
-    subs=$(wc -l < subdomains/all.txt 2>/dev/null || echo 0)
-    deep_xss=$(wc -l < vulns/deep/reflected_xss_confirmed.txt 2>/dev/null || echo 0)
-    deep_lfi=$(wc -l < vulns/deep/lfi_confirmed.txt 2>/dev/null || echo 0)
-    basic=$(wc -l < vulns/basic_checks.txt 2>/dev/null || echo 0)
-    ai_active_confirmed=$(wc -l < vulns/ai_active/confirmed.txt 2>/dev/null || echo 0)
-    sqli_err=$(wc -l < vulns/sqli/error_based.tsv 2>/dev/null || echo 0)
-    sqli_time=$(wc -l < vulns/sqli/time_based.tsv 2>/dev/null || echo 0)
-    ssrf_meta=$(wc -l < vulns/ssrf/localhost_probe.tsv 2>/dev/null || echo 0)
-    graphql_intro=$(wc -l < vulns/graphql/introspection.tsv 2>/dev/null || echo 0)
-    jwt_tokens=$(wc -l < vulns/jwt/found_tokens.tsv 2>/dev/null || echo 0)
-    xss_conf=$(wc -l < validate/xss_confirmed.tsv 2>/dev/null || echo 0)
-    idor=$(wc -l < validate/idor_candidates.tsv 2>/dev/null || echo 0)
-    chains=$(grep -c '^## Chain ' reports/attack_chains.md 2>/dev/null || echo 0)
+    crit=$(safe_wcl vulns/nuclei_critical.txt)
+    high=$(safe_wcl vulns/nuclei_high.txt)
+    hosts=$(safe_wcl web/live.txt)
+    subs=$(safe_wcl subdomains/all.txt)
+    deep_xss=$(safe_wcl vulns/deep/reflected_xss_confirmed.txt)
+    deep_lfi=$(safe_wcl vulns/deep/lfi_confirmed.txt)
+    basic=$(safe_wcl vulns/basic_checks.txt)
+    ai_active_confirmed=$(safe_wcl vulns/ai_active/confirmed.txt)
+    sqli_err=$(safe_wcl vulns/sqli/error_based.tsv)
+    sqli_time=$(safe_wcl vulns/sqli/time_based.tsv)
+    ssrf_meta=$(safe_wcl vulns/ssrf/localhost_probe.tsv)
+    graphql_intro=$(safe_wcl vulns/graphql/introspection.tsv)
+    jwt_tokens=$(safe_wcl vulns/jwt/found_tokens.tsv)
+    xss_conf=$(safe_wcl validate/xss_confirmed.tsv)
+    idor=$(safe_wcl validate/idor_candidates.tsv)
+    chains=$([ -f reports/attack_chains.md ] && grep -c '^## Chain ' reports/attack_chains.md 2>/dev/null || echo 0)
 
     local msg="✅ Recon done: \`${INPUT_TARGET}\`
 • Subs: ${subs}
@@ -356,7 +356,7 @@ Output: \`${OUTPUT_DIR}\`"
     fi
     if [ "$DIFF_MODE" -eq 1 ] && [ -n "$PREV_RUN" ]; then
         local new
-        new=$(wc -l < diffs/new_nuclei_findings.txt 2>/dev/null || echo 0)
+        new=$(safe_wcl diffs/new_nuclei_findings.txt)
         msg="${msg}
 • NEW findings: ${new}"
     fi
@@ -370,8 +370,19 @@ Output: \`${OUTPUT_DIR}\`"
     fi
     notify "$msg"
 
+    # Resolve actual report filenames on disk (newest first). On -r resume,
+    # $TIMESTAMP is "now" while the report may have been written in an earlier
+    # run — so we lookup rather than compute.
+    local md_report html_report
+    md_report=$(ls -t "$OUTPUT_DIR"/reports/report_"${TARGET_SAFE}"_*.md   2>/dev/null | head -1)
+    html_report=$(ls -t "$OUTPUT_DIR"/reports/report_"${TARGET_SAFE}"_*.html 2>/dev/null | head -1)
+    md_report=${md_report:+reports/$(basename "$md_report")}
+    html_report=${html_report:+reports/$(basename "$html_report")}
+
     echo -e "\n${G}[✓] Done. Results: $OUTPUT_DIR${N}"
-    echo -e "${Y}[!] Open reports/report_${TARGET_SAFE}_${TIMESTAMP}.md and checklist/MANUAL_CHECKLIST.md${N}\n"
+    echo -e "${Y}[!] Markdown:  ${md_report:-reports/report_${TARGET_SAFE}_${TIMESTAMP}.md (not generated)}${N}"
+    echo -e "${Y}[!] HTML:      ${html_report:-reports/report_${TARGET_SAFE}_${TIMESTAMP}.html (not generated)}${N}"
+    echo -e "${Y}[!] Checklist: checklist/MANUAL_CHECKLIST.md${N}\n"
 }
 
 main

@@ -16,6 +16,15 @@ info()  { echo -e "${C}[i] $*${N}"; }
 
 have() { command -v "$1" &>/dev/null; }
 
+# Line-count that never errors if the file is missing or unreadable.
+# `wc -l < file 2>/dev/null` does NOT suppress bash's own "No such file"
+# message because the redirection failure is raised by the shell before
+# wc runs — so we gate on -f explicitly.
+safe_wcl() { [ -f "$1" ] && wc -l < "$1" 2>/dev/null || echo 0; }
+
+# Strip ANSI CSI escape sequences (e.g. testssl.sh color output \x1b[1m).
+ansi_strip() { sed -e 's/\x1b\[[0-9;?]*[A-Za-z]//g' -e 's/\x1b[()][AB012]//g'; }
+
 # ============ Webhook notifications ============
 send_webhook_request() {
     local attempt http_code curl_rc=0

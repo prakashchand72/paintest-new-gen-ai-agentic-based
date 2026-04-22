@@ -351,7 +351,7 @@ do_vuln_scan() {
     rm -f "$jwt_tmp"
 
     if have testssl.sh && [ -s web/live_dedup.txt ]; then
-        timeout 180 testssl.sh --quiet --fast "$(head -1 web/live_dedup.txt)" \
+        timeout 180 testssl.sh --quiet --fast --color 0 "$(head -1 web/live_dedup.txt)" \
             > vulns/ssl.txt 2>/dev/null || true
         grep -Ei 'TLS 1|TLS1|SSLv|Trust \(hostname\)|certificate does not match|not match|mismatch' \
             vulns/ssl.txt 2>/dev/null | sort -u > vulns/basic_tls_testssl.txt
@@ -385,7 +385,7 @@ do_cve_correlate() {
     fi
 
     local tag_list
-    tag_list=$(paste -sd, - vulns/cve/detected_tags.txt | cut -c1-500)
+    tag_list=$(paste -sd, vulns/cve/detected_tags.txt | cut -c1-500)
     log "CVE correlation (nuclei -tags cve + detected: $tag_list)"
 
     local hdrs
@@ -752,7 +752,7 @@ do_nosql_scan() {
     mapfile -t c_hdrs < <(curl_headers)
 
     local payloads=(
-        "[$ne]=x"
+        "[\$ne]=x"
         "[\$gt]="
         "';return(true);//"
         "{\"\$ne\":null}"

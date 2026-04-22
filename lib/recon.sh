@@ -175,7 +175,7 @@ do_asn_expand() {
 
     if have asnmap; then
         log "asnmap → CIDR ranges"
-        asnmap -d "$TARGET" -silent 2>/dev/null | sort -u > recon/asn/cidrs.txt
+        timeout 120 asnmap -d "$TARGET" -silent 2>/dev/null | sort -u > recon/asn/cidrs.txt
     fi
 
     if have metabigor && [ ! -s recon/asn/cidrs.txt ]; then
@@ -476,7 +476,9 @@ do_dir_fuzz() {
             safe=$(echo "$url" | sed 's|https\?://||; s|[/:]|_|g')
             ffuf_p -u "${url}/FUZZ" -w "$wl" \
                  -mc 200,201,204,301,302,307,401,403 \
-                 -fc 404 -t "$([ "$DEEP_MODE" -eq 1 ] && echo "$DEEP_THREADS" || echo "$THREADS")" \
+                 -fc 404 -ac \
+                 -maxtime-job "$([ "$DEEP_MODE" -eq 1 ] && echo 600 || echo 180)" \
+                 -t "$([ "$DEEP_MODE" -eq 1 ] && echo "$DEEP_THREADS" || echo "$THREADS")" \
                  -rate "$([ "$DEEP_MODE" -eq 1 ] && echo "$DEEP_RATE" || echo "$RATE")" -s \
                  "${hdrs[@]}" \
                  -o "fuzzing/${safe}.json" -of json 2>/dev/null
