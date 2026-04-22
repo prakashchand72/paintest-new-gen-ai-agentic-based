@@ -112,8 +112,13 @@ CALLBACK_DOMAIN="${CALLBACK_DOMAIN:-oob.attacker-callback.invalid}"
 WEBHOOK_URL="${WEBHOOK_URL:-}"
 AUTH_HEADER="${AUTH_HEADER:-}"
 AUTH_COOKIE="${AUTH_COOKIE:-}"
-UA="Mozilla/5.0 (BugBounty; ${HANDLE})"
-ID_HEADER="X-Bug-Bounty: ${HANDLE}"
+# UA default is a real Chrome string so we don't get WAF-dropped.
+# The bug-bounty identity is carried on X-Bug-Bounty (header only) — most
+# legitimate BB programs read the header, not the UA, and WAFs are less
+# likely to block on a custom header than on a scanner-ish UA.
+# Override either via env: UA=, ID_HEADER=.
+UA="${UA:-Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36}"
+ID_HEADER="${ID_HEADER:-X-Bug-Bounty: ${HANDLE}}"
 SCOPE_FILE="${SCOPE_FILE:-$(pwd)/scope.txt}"
 SECLISTS="${SECLISTS:-/usr/share/seclists}"
 MAX_JS_FILES="${MAX_JS_FILES:-300}"
