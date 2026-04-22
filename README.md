@@ -146,6 +146,15 @@ AI_PROVIDER="openai"
 AI_API_TOKEN=""      # optional; prefer OPENAI_API_KEY / ANTHROPIC_API_KEY env vars
 AI_MODEL=""          # blank selects provider default
 AI_ACTIVE_MAX_TESTS=50
+
+# Wall-clock caps (seconds) — stop stalls on CDN-fronted / slow targets.
+PORT_SCAN_TIMEOUT=600    # naabu cap per phase
+NMAP_TIMEOUT=600         # background nmap script run cap
+
+# Override the default User-Agent / identity header if a bug bounty
+# program requires a specific UA or their WAF blocks the default.
+# UA=""                  # default: realistic Chrome UA (won't trigger WAFs)
+# ID_HEADER="X-Bug-Bounty: your_handle"
 ```
 
 Config load order:
@@ -368,3 +377,7 @@ More help is in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 ## Legal
 
 This project is for authorized security testing only. You are responsible for permission, scope, rate limits, disclosure rules, and local law.
+
+## License
+
+Paintest is released under the MIT License. See [`LICENSE`](LICENSE) for the full text.
