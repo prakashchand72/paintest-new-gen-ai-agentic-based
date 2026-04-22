@@ -225,6 +225,9 @@ do_favicon_pivot() {
 }
 
 # ============ Phase: port_scan ============
+# Wall-clock caps via PORT_SCAN_TIMEOUT (naabu) and NMAP_TIMEOUT (nmap bg).
+# Default 10 min each — CDN-fronted targets (Cloudflare) black-hole SYN probes
+# and a top-1000 scan can otherwise stall indefinitely. Override with env vars.
 do_port_scan() {
     grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' \
         subdomains/resolved.txt 2>/dev/null | sort -u > ports/ips.txt
@@ -232,24 +235,47 @@ do_port_scan() {
     [ -s recon/asn/ips_from_asn.txt ] && cat recon/asn/ips_from_asn.txt >> ports/ips.txt
     sort -u -o ports/ips.txt ports/ips.txt
 
-    if have naabu && [ -s ports/ips.txt ]; then
-        local rate_val
-        rate_val=$([ "$DEEP_MODE" -eq 1 ] && echo 1000 || echo 500)
-        local ports_flag="-top-ports 1000"
-        [ "$DEEP_MODE" -eq 1 ] && ports_flag="-p -"
-        # shellcheck disable=SC2086
-        naabu -list ports/ips.txt $ports_flag -rate "$rate_val" -silent \
-            -o ports/naabu.txt 2>/dev/null
+    local ip_count
+    ip_count=$(safe_wcl ports/ips.txt)
+    if [ "$ip_count" -eq 0 ] 2>/dev/null; then
+        info "No IPs resolved for port_scan — skipping"
+        return 0
     fi
+    info "port_scan: ${ip_count} IP(s) to probe"
+
+    if have naabu; then
+        local rate_val ports_flag port_count_label naabu_timeout rc
+        rate_val=$([ "$DEEP_MODE" -eq 1 ] && echo 1000 || echo 500)
+        if [ "$DEEP_MODE" -eq 1 ]; then
+            ports_flag="-p -"; port_count_label="all 65535"
+        else
+            ports_flag="-top-ports 1000"; port_count_label="top-1000"
+        fi
+        naabu_timeout="${PORT_SCAN_TIMEOUT:-600}"
+        info "naabu: ${port_count_label} × ${ip_count} IP(s), rate=${rate_val}, cap=${naabu_timeout}s"
+        # shellcheck disable=SC2086
+        timeout "$naabu_timeout" naabu -list ports/ips.txt $ports_flag \
+            -rate "$rate_val" -silent \
+            -o ports/naabu.txt 2>/dev/null
+        rc=$?
+        if [ "$rc" -eq 124 ]; then
+            warn "naabu hit ${naabu_timeout}s timeout (likely CDN-fronted target drops SYN probes) — partial results kept"
+        fi
+    fi
+
     if have nmap && [ -s ports/naabu.txt ]; then
-        local pp
+        local pp nmap_scripts nmap_timeout
         pp=$(awk -F: '{print $2}' ports/naabu.txt | sort -un | paste -sd, -)
-        local nmap_scripts="default,vuln"
+        nmap_scripts="default,vuln"
         [ "$DEEP_MODE" -eq 1 ] || nmap_scripts="default"
-        [ -n "$pp" ] && ( nmap -iL ports/ips.txt -sV -Pn -T3 -p "$pp" \
-            --script "$nmap_scripts" \
-            -oA ports/nmap 2>/dev/null >/dev/null ) &
-        disown
+        nmap_timeout="${NMAP_TIMEOUT:-600}"
+        if [ -n "$pp" ]; then
+            info "nmap (backgrounded): scripts=${nmap_scripts}, cap=${nmap_timeout}s"
+            ( timeout "$nmap_timeout" nmap -iL ports/ips.txt -sV -Pn -T3 -p "$pp" \
+                --script "$nmap_scripts" \
+                -oA ports/nmap 2>/dev/null >/dev/null ) &
+            disown
+        fi
     fi
     return 0
 }

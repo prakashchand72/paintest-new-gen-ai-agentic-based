@@ -28,8 +28,15 @@ set -uo pipefail
 
 # ============= AUTO-LOAD CONFIG =============
 # Priority: ~/.recon.conf < $(pwd)/.env < script defaults
-[ -f "$HOME/.recon.conf" ] && source "$HOME/.recon.conf"
-[ -f "$(pwd)/.env" ] && source "$(pwd)/.env"
+PAINTEST_CONFIG_LOADED=()
+if [ -f "$HOME/.recon.conf" ]; then
+    source "$HOME/.recon.conf"
+    PAINTEST_CONFIG_LOADED+=("$HOME/.recon.conf")
+fi
+if [ -f "$(pwd)/.env" ]; then
+    source "$(pwd)/.env"
+    PAINTEST_CONFIG_LOADED+=("$(pwd)/.env")
+fi
 
 # ============= ARG PARSING =============
 SUBDOMAIN_MODE=0
@@ -100,7 +107,7 @@ THREADS="${THREADS:-25}"
 RATE="${RATE:-30}"
 DEEP_THREADS="${DEEP_THREADS:-${AGGRESSIVE_THREADS:-50}}"
 DEEP_RATE="${DEEP_RATE:-${AGGRESSIVE_RATE:-100}}"
-HANDLE="${BOUNTY_HANDLE:-anon}"
+HANDLE="${HANDLE:-${BOUNTY_HANDLE:-anon}}"
 CALLBACK_DOMAIN="${CALLBACK_DOMAIN:-oob.attacker-callback.invalid}"
 WEBHOOK_URL="${WEBHOOK_URL:-}"
 AUTH_HEADER="${AUTH_HEADER:-}"
@@ -230,6 +237,11 @@ EOF
     echo -e "${G}[+] Target:    ${INPUT_TARGET}${N}"
     echo -e "${G}[+] Handle:    ${HANDLE}${N}"
     echo -e "${G}[+] Output:    ${OUTPUT_DIR}${N}"
+    if [ "${#PAINTEST_CONFIG_LOADED[@]}" -gt 0 ]; then
+        echo -e "${G}[+] Config:    loaded ${PAINTEST_CONFIG_LOADED[*]}${N}"
+    else
+        echo -e "${Y}[+] Config:    none (no ~/.recon.conf or ./.env)${N}"
+    fi
     echo -e "${G}[+] Callback:  ${CALLBACK_DOMAIN}${N}"
     [ -n "$AUTH_HEADER" ] && echo -e "${G}[+] Auth:      header set${N}"
     [ -n "$AUTH_COOKIE" ] && echo -e "${G}[+] Auth:      cookie set${N}"
@@ -248,8 +260,13 @@ EOF
     [ "$AI_ACTIVE_MODE" -eq 1 ] && echo -e "${R}[+] AI active: ${AI_ACTIVE_MAX_TESTS} bounded tests max${N}"
     [ "$RESUME_MODE" -eq 1 ] && echo -e "${C}[+] Resume:    ON${N}"
     [ "$DIFF_MODE" -eq 1 ]   && echo -e "${C}[+] Diff:      ON (prev: ${PREV_RUN:-none})${N}"
-    [ -f "$SCOPE_FILE" ] && echo -e "${G}[+] Scope file: ${SCOPE_FILE}${N}" \
-        || warn "No scope.txt — defaulting to *.${TARGET}"
+    if [ -f "$SCOPE_FILE" ]; then
+        echo -e "${G}[+] Scope file: ${SCOPE_FILE}${N}"
+    elif [ "$SUBDOMAIN_MODE" -eq 1 ]; then
+        warn "scope.txt not found — defaulting wildcard to *.${TARGET}"
+    else
+        warn "scope.txt not found — defaulting to single target: ${TARGET}"
+    fi
     echo
 }
 
