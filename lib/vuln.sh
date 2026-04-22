@@ -353,8 +353,14 @@ do_vuln_scan() {
     if have testssl.sh && [ -s web/live_dedup.txt ]; then
         timeout 180 testssl.sh --quiet --fast --color 0 "$(head -1 web/live_dedup.txt)" \
             > vulns/ssl.txt 2>/dev/null || true
-        grep -Ei 'TLS 1|TLS1|SSLv|Trust \(hostname\)|certificate does not match|not match|mismatch' \
-            vulns/ssl.txt 2>/dev/null | sort -u > vulns/basic_tls_testssl.txt
+        # Keep only real findings. testssl emits lots of "not vulnerable (OK)"
+        # / "not offered" lines that otherwise leak through as false positives.
+        # We whitelist actual problem indicators and drop known-benign phrasing.
+        grep -Ei '\bVULNERABLE\b|\bYES\b.*(vulnerable|supported|offered)|\b(TLS 1\.[01]|SSLv[23]).*(offered|supported|yes)|certificate.*mismatch|does NOT match|not trusted|expired|self-signed|\bweak\b|DEPRECATED|INSECURE|\bBROKEN\b|hostname.*mismatch' \
+            vulns/ssl.txt 2>/dev/null \
+            | grep -Eiv '\bnot vulnerable\b|\(OK\)|\bnot offered\b|\bno SSL\b|\bno RSA certificate\b|TLS 1\.[23] only|best choice|server cipher order' \
+            | awk 'NF > 1' \
+            | sort -u > vulns/basic_tls_testssl.txt
     fi
 
     if [ "$SUBDOMAIN_MODE" -eq 1 ]; then

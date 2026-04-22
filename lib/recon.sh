@@ -314,7 +314,8 @@ do_web_probe() {
     [ -s web/live.txt ] && adaptive_probe "$(head -1 web/live.txt)"
 
     have wafw00f   && ( wafw00f -i web/live.txt -o web/waf.txt 2>/dev/null ) &
-    have gowitness && ( gowitness file -f web/live_dedup.txt -P screenshots/ 2>/dev/null ) &
+    # gowitness v3: `scan file -f <list> -s <dir>`. v2 was `file -f … -P …`.
+    have gowitness && ( gowitness scan file -f web/live_dedup.txt -s screenshots/ -q 2>/dev/null ) &
     wait
 
     log "Live hosts: $(wc -l < web/live.txt 2>/dev/null || echo 0) \

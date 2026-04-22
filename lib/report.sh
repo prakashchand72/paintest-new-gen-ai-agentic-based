@@ -152,6 +152,18 @@ do_report() {
     local findings_jsonl="reports/findings.jsonl"
     : > "$findings_jsonl"
 
+    # Re-derive basic_tls_testssl.txt from the authoritative vulns/ssl.txt
+    # so filter fixes land on regenerated reports too. testssl emits many
+    # "not vulnerable (OK)" / "not offered" informational lines; keep only
+    # real issue indicators.
+    if [ -s vulns/ssl.txt ]; then
+        ansi_strip < vulns/ssl.txt \
+            | grep -Ei '\bVULNERABLE\b|\bYES\b.*(vulnerable|supported|offered)|\b(TLS 1\.[01]|SSLv[23]).*(offered|supported|yes)|certificate.*mismatch|does NOT match|not trusted|expired|self-signed|\bweak\b|DEPRECATED|INSECURE|\bBROKEN\b|hostname.*mismatch' \
+            | grep -Eiv '\bnot vulnerable\b|\(OK\)|\bnot offered\b|\bno SSL\b|\bno RSA certificate\b|TLS 1\.[23] only|best choice|server cipher order' \
+            | awk 'NF > 1' \
+            | sort -u > vulns/basic_tls_testssl.txt
+    fi
+
     # ----- Build a normalized findings.jsonl for SARIF/HTML to consume -----
     _emit() {
         local class="$1" severity="$2" url="$3" evidence="$4" payload="${5:-}"
@@ -473,6 +485,23 @@ do_report() {
                     payload: "", cvss: "", poc: ""
                 }
             ' >> "$findings_jsonl"
+    fi
+
+    # ----- Dedupe findings.jsonl -----
+    # Nuclei emits one JSONL row per matcher hit, so a template like
+    # "Wappalyzer Technology Detection" that fires N tech signatures gets
+    # N rows for the same host. Collapse identical (class, severity, url,
+    # evidence) tuples so HTML / SARIF / Discord / AI triage don't duplicate.
+    if [ -s "$findings_jsonl" ] && have jq; then
+        local dedup_tmp
+        dedup_tmp="${findings_jsonl}.dedup"
+        if jq -cs 'unique_by([.class, .severity, .url, .evidence]) | .[]' \
+               "$findings_jsonl" 2>/dev/null > "$dedup_tmp" \
+           && [ -s "$dedup_tmp" ]; then
+            mv "$dedup_tmp" "$findings_jsonl"
+        else
+            rm -f "$dedup_tmp"
+        fi
     fi
 
     # ----- Markdown report -----
